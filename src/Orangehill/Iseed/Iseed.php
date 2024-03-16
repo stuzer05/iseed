@@ -52,8 +52,6 @@ class Iseed
     /**
      * Generates a seed file.
      * @param  string   $table
-     * @param  string   $prefix
-     * @param  string   $suffix
      * @param  string   $database
      * @param  int      $max
      * @param  string   $prerunEvent
@@ -61,7 +59,7 @@ class Iseed
      * @return bool
      * @throws Orangehill\Iseed\TableNotFoundException
      */
-    public function generateSeed($table, $prefix=null, $suffix=null, $database = null, $max = 0, $chunkSize = 0, $exclude = null, $prerunEvent = null, $postrunEvent = null, $dumpAuto = true, $indexed = true, $orderBy = null, $direction = 'ASC')
+    public function generateSeed($table, $database = null, $max = 0, $exclude = null, $prerunEvent = null, $postrunEvent = null, $dumpAuto = true)
     {
         if (!$database) {
             $database = config('database.default');
@@ -75,13 +73,13 @@ class Iseed
         }
 
         // Get the data
-        $data = $this->getData($table, $max, $exclude, $orderBy, $direction);
+        $data = $this->getData($table, $max, $exclude);
 
         // Repack the data
         $dataArray = $this->repackSeedData($data);
 
         // Generate class name
-        $className = $this->generateClassName($table, $prefix, $suffix);
+        $className = $this->generateClassName($table);
 
         // Get template for a seed file contents
         $stub = $this->readStubFile($this->getStubPath() . '/seed.stub');
@@ -98,10 +96,9 @@ class Iseed
             $stub,
             $table,
             $dataArray,
-            $chunkSize,
+            null,
             $prerunEvent,
-            $postrunEvent,
-            $indexed
+            $postrunEvent
         );
 
         // Save a populated stub
@@ -130,17 +127,13 @@ class Iseed
      * @param  string $table
      * @return Array
      */
-    public function getData($table, $max, $exclude = null, $orderBy = null, $direction = 'ASC')
+    public function getData($table, $max, $exclude = null)
     {
         $result = \DB::connection($this->databaseName)->table($table);
 
         if (!empty($exclude)) {
             $allColumns = \DB::connection($this->databaseName)->getSchemaBuilder()->getColumnListing($table);
             $result = $result->select(array_diff($allColumns, $exclude));
-        }
-
-        if($orderBy) {
-            $result = $result->orderBy($orderBy, $direction);
         }
 
         if ($max) {
@@ -186,18 +179,16 @@ class Iseed
     /**
      * Generates a seed class name (also used as a filename)
      * @param  string  $table
-     * @param  string  $prefix
-     * @param  string  $suffix
      * @return string
      */
-    public function generateClassName($table, $prefix=null, $suffix=null)
+    public function generateClassName($table)
     {
         $tableString = '';
         $tableName = explode('_', $table);
         foreach ($tableName as $tableNameExploded) {
             $tableString .= ucfirst($tableNameExploded);
         }
-        return ($prefix ? $prefix : '') . ucfirst($tableString) . 'Table' . ($suffix ? $suffix : '') . 'Seeder';
+        return ucfirst($tableString) . 'TableSeeder';
     }
 
     /**
@@ -206,7 +197,7 @@ class Iseed
      */
     public function getStubPath()
     {
-        return __DIR__ . DIRECTORY_SEPARATOR . 'stubs';
+        return __DIR__ . DIRECTORY_SEPARATOR . 'Stubs';
     }
 
     /**
@@ -220,10 +211,9 @@ class Iseed
      * @param  string   $postunEvent
      * @return string
      */
-    public function populateStub($class, $stub, $table, $data, $chunkSize = null, $prerunEvent = null, $postrunEvent = null, $indexed = true)
+    public function populateStub($class, $stub, $table, $data, $chunkSize = null, $prerunEvent = null, $postrunEvent = null)
     {
         $chunkSize = $chunkSize ?: config('iseed::config.chunk_size');
-
         $inserts = '';
         $chunks = array_chunk($data, $chunkSize);
         foreach ($chunks as $chunk) {
@@ -232,7 +222,7 @@ class Iseed
             $inserts .= sprintf(
                 "\DB::table('%s')->insert(%s);",
                 $table,
-                $this->prettifyArray($chunk, $indexed)
+                $this->prettifyArray($chunk)
             );
         }
 
@@ -299,11 +289,9 @@ class Iseed
      * @param  array  $array
      * @return string
      */
-    protected function prettifyArray($array, $indexed = true)
+    protected function prettifyArray($array)
     {
-        $content = ($indexed)
-            ? var_export($array, true)
-            : preg_replace("/[0-9]+ \=\>/i", '', var_export($array, true));
+        $content = var_export($array, true);
 
         $lines = explode("\n", $content);
 
