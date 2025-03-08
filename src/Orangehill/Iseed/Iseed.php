@@ -59,7 +59,7 @@ class Iseed
      * @return bool
      * @throws Orangehill\Iseed\TableNotFoundException
      */
-    public function generateSeed($table, $database = null, $max = 0, $exclude = null, $prerunEvent = null, $postrunEvent = null, $dumpAuto = true)
+    public function generateSeed($table, $prefix = null, $suffix = null, $database = null, $max = 0, $chunkSize = 0, $exclude = null, $prerunEvent = null, $postrunEvent = null, $dumpAuto = true, $indexed = true, $orderBy = null, $direction = 'ASC', $whereClause = null)
     {
         if (!$database) {
             $database = config('database.default');
@@ -73,7 +73,7 @@ class Iseed
         }
 
         // Get the data
-        $data = $this->getData($table, $max, $exclude);
+        $data = $this->getData($table, $max, $exclude, $orderBy, $direction, $whereClause);
 
         // Repack the data
         $dataArray = $this->repackSeedData($data);
@@ -127,13 +127,21 @@ class Iseed
      * @param  string $table
      * @return Array
      */
-    public function getData($table, $max, $exclude = null)
+    public function getData($table, $max, $exclude = null, $orderBy = null, $direction = 'ASC', $whereClause = null)
     {
         $result = \DB::connection($this->databaseName)->table($table);
 
         if (!empty($exclude)) {
             $allColumns = \DB::connection($this->databaseName)->getSchemaBuilder()->getColumnListing($table);
             $result = $result->select(array_diff($allColumns, $exclude));
+        }
+
+        if ($whereClause) {
+            $result = $result->whereRaw($whereClause);
+        }
+
+        if ($orderBy) {
+            $result = $result->orderBy($orderBy, $direction);
         }
 
         if ($max) {
@@ -243,7 +251,9 @@ class Iseed
         }
 
         $stub = str_replace(
-            '{{prerun_event}}', $prerunEventInsert, $stub
+            '{{prerun_event}}',
+            $prerunEventInsert,
+            $stub
         );
 
         if (!is_null($table)) {
@@ -265,7 +275,9 @@ class Iseed
         }
 
         $stub = str_replace(
-            '{{postrun_event}}', $postrunEventInsert, $stub
+            '{{postrun_event}}',
+            $postrunEventInsert,
+            $stub
         );
 
         $stub = str_replace('{{insert_statements}}', $inserts, $stub);
@@ -401,5 +413,12 @@ class Iseed
         }
 
         return $this->files->put($databaseSeederPath, $content) !== false;
+    }
+
+    public function getAllTableNames()
+    {
+        // Depending on your Laravel version, you may use the Doctrine schema manager:
+        $schema = \DB::connection($this->databaseName)->getDoctrineSchemaManager();
+        return $schema->listTableNames();
     }
 }
